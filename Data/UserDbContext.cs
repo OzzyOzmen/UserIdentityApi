@@ -22,7 +22,7 @@ namespace UserIdentityApi.Data
             modelBuilder.Entity<UserToken>().ToTable("UserToken");
             modelBuilder.Entity<UserLogin>().ToTable("UserLogin");
 
-            // İlişkileri yapılandır
+            // Configure relationships
             modelBuilder.Entity<UserRole>(b =>
             {
                 b.HasOne(ur => ur.User)

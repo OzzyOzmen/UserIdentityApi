@@ -114,7 +114,7 @@ builder.Services.AddControllers(options =>
 
 builder.Services.AddEndpointsApiExplorer();
 
-// CORS yapılandırması
+// CORS configuration
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -125,7 +125,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Swagger/OpenAPI yapılandırması
+// Swagger/OpenAPI configuration
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo { Title = "Room Rent Identity API", Version = "v1" });

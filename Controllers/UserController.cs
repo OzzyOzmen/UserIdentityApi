@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using System.Linq;
 using Microsoft.AspNetCore.Authorization;
@@ -7,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using UserIdentityApi.Data.Entities;
 using UserIdentityApi.Models;
 using UserIdentityApi.Infrastructure.Extensions;
+using System.Text.Json;
 
 namespace UserIdentityApi.Controllers
 {
@@ -69,6 +71,40 @@ namespace UserIdentityApi.Controllers
                 phoneNumber = user.PhoneNumber,
                 claims = user.Claims.Select(c => new { c.ClaimType, c.ClaimValue })
             }));
+        }
+
+        [HttpGet("statistics")]
+        [Authorize]
+        public async Task<IActionResult> GetStatistics()
+        {
+            try
+            {
+                var totalUsers = await _userManager.Users.CountAsync();
+                var admins = await _userManager.GetUsersInRoleAsync("Admin");
+                var consultants = await _userManager.GetUsersInRoleAsync("SuperUser");
+                var customers = await _userManager.GetUsersInRoleAsync("User");
+
+                // Log the counts
+                Console.WriteLine($"Statistics - Total Users: {totalUsers}, Admins: {admins.Count}, Consultants: {consultants.Count}, Customers: {customers.Count}");
+
+                var response = new
+                {
+                    totalUsers = totalUsers,
+                    totalAdmins = admins.Count,
+                    totalConsultants = consultants.Count,
+                    totalCustomers = customers.Count
+                };
+
+                // Log the response
+                Console.WriteLine($"Response: {JsonSerializer.Serialize(response)}");
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetStatistics: {ex.Message}");
+                return StatusCode(500, "An error occurred while getting user statistics");
+            }
         }
     }
 } 

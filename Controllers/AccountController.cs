@@ -49,15 +49,17 @@ namespace UserIdentityApi.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody]LoginDto request)
         {
-            var user = await _userManager.FindByEmailAsync(request.Email);
+            // Tek sorguda user ve rollerini al
+            var user = await _userManager.Users
+                .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(u => u.Email == request.Email);
+
             if (user != null)
             {
                 var result = await _signInManager.CheckPasswordSignInAsync(user, request.Password, false);
                 if (result.Succeeded)
                 {
-                    // Get user roles
-                    var userRoles = await _userManager.GetRolesAsync(user);
-                    
                     var claims = new List<Claim>
                     {
                         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
@@ -67,10 +69,12 @@ namespace UserIdentityApi.Controllers
                         new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
                     };
 
-                    // Add role claims
-                    foreach (var role in userRoles)
+                    // Get roles directly from UserRoles
+                    foreach (var userRole in user.UserRoles)
                     {
-                        claims.Add(new Claim(ClaimTypes.Role, role));
+                        var role = userRole.Role;
+                        claims.Add(new Claim(ClaimTypes.Role, role.Name));
+                        claims.Add(new Claim("roleId", role.Id.ToString()));
                     }
 
                     var securityKey = _configuration["JwtConfiguration:SecurityKey"] ?? 
@@ -91,37 +95,15 @@ namespace UserIdentityApi.Controllers
 
                     var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
 
-                    await _userManager.SetAuthenticationTokenAsync(user, "JWT", "AccessToken", tokenString);
-
-                    Response.Cookies.Append("jwt_token", tokenString, new CookieOptions
-                    {
-                        HttpOnly = true,
-                        Secure = true,
-                        SameSite = SameSiteMode.Strict,
-                        Expires = expires
-                    });
-
-                    foreach (var claim in claims)
-                    {
-                        await _userManager.AddClaimAsync(user, claim);
-                    }
-
                     return Ok(new
                     {
                         token = tokenString,
-                        expiration = expires,
-                        user = new
-                        {
-                            id = user.Id,
-                            userName = user.UserName,
-                            email = user.Email,
-                            roles = userRoles
-                        }
+                        expiration = expires
                     });
                 }
+                return Unauthorized(new { message = "Invalid credentials" });
             }
-
-            return Unauthorized(new { message = "Geçersiz email adresi veya şifre." });
+            return NotFound(new { message = "User not found" });
         }
 
         [HttpPost]
@@ -310,13 +292,13 @@ namespace UserIdentityApi.Controllers
                     return BadRequest("Please try another email address.");
                 }
 
-                // 6 haneli pin üret
+                // Generate 6-digit pin
                 var resetPin = GenerateRandomPin();
                 _logger.LogInformation($"Generated reset PIN for user: {request.Email}");
                 
-                // Pin'i ve geçerlilik süresini kullanıcıya kaydet
+                // Save pin and expiration time to user
                 user.PasswordResetCode = resetPin;
-                user.PasswordResetCodeExpiration = DateTime.UtcNow.AddMinutes(15); // 15 dakika geçerli
+                user.PasswordResetCodeExpiration = DateTime.UtcNow.AddMinutes(15); // Valid for 15 minutes
                 
                 var updateResult = await _userManager.UpdateAsync(user);
                 if (!updateResult.Succeeded)
@@ -325,7 +307,7 @@ namespace UserIdentityApi.Controllers
                     return BadRequest("Failed to generate reset code. Please try again.");
                 }
 
-                // Email gönder
+                // Send email
                 var emailContent = $@"
                     <h2>Password Reset Code</h2>
                     <p>Your password reset code is: <strong>{resetPin}</strong></p>
@@ -365,7 +347,7 @@ namespace UserIdentityApi.Controllers
                     return BadRequest("Please try another email address.");
                 }
 
-                // Pin'in geçerliliğini kontrol et
+                // Check pin validity
                 if (string.IsNullOrEmpty(user.PasswordResetCode) || 
                     user.PasswordResetCodeExpiration == null || 
                     user.PasswordResetCodeExpiration < DateTime.UtcNow)
@@ -374,14 +356,14 @@ namespace UserIdentityApi.Controllers
                     return BadRequest("Reset code has expired. Please request a new one.");
                 }
 
-                // Gönderilen pin doğru mu kontrol et
+                // Check if the sent pin is correct
                 if (user.PasswordResetCode != request.Code)
                 {
                     _logger.LogWarning($"Invalid reset code provided for user: {request.Email}");
                     return BadRequest("Invalid reset code.");
                 }
 
-                // Şifreyi güncelle
+                // Update password
                 var removePasswordResult = await _userManager.RemovePasswordAsync(user);
                 if (!removePasswordResult.Succeeded)
                 {
