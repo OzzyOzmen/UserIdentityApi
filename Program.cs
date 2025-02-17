@@ -128,7 +128,7 @@ builder.Services.AddCors(options =>
 // Swagger/OpenAPI configuration
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "Room Rent Identity API", Version = "v1" });
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "User Identity API", Version = "v1" });
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -182,7 +182,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Room Rent Identity API V1");
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "User Identity API V1");
         c.DocExpansion(DocExpansion.None);
     });
 }
